@@ -30,6 +30,7 @@ button.danger{background:#2a1120;color:#ffd5d5;border-color:#4c1a2d}
 .badge.ok{color:#0b3318;background:#112a19;border-color:#224d2d}
 .badge.warn{color:#392a00;background:#2b220f;border-color:#4c3f10}
 .badge.bad{color:#3a000c;background:#2a0e12;border-color:#4c1a25}
+.actions button{margin-right:6px}
 .hide-sm{display:table-cell}
 @media (max-width:800px){ .hide-sm{display:none} }
 
@@ -67,7 +68,6 @@ button.danger{background:#2a1120;color:#ffd5d5;border-color:#4c1a2d}
 
 <div class="wrap">
   <div class="panel">
-    <!-- quick tabs -->
     <div class="tabbar" id="tabs">
       <button data-status="" class="active">All</button>
       <button data-status="Applied">Applied</button>
@@ -79,7 +79,6 @@ button.danger{background:#2a1120;color:#ffd5d5;border-color:#4c1a2d}
       <span class="note" id="draftNote" style="margin-left:auto"></span>
     </div>
 
-    <!-- table -->
     <table class="table" id="tbl">
       <thead>
         <tr>
@@ -90,6 +89,7 @@ button.danger{background:#2a1120;color:#ffd5d5;border-color:#4c1a2d}
           <th>Due</th>
           <th class="sortable" data-key="status">Status</th>
           <th class="hide-sm">Notes</th>
+          <th>Actions</th>
         </tr>
       </thead>
       <tbody id="rows"></tbody>
@@ -98,16 +98,16 @@ button.danger{background:#2a1120;color:#ffd5d5;border-color:#4c1a2d}
 </div>
 
 <footer>
-  <span class="note">Data loads from <code>/data/jobs.json</code>. Add items as drafts, then Export JSON or push to GitHub.</span>
+  <span class="note">Data loads from <code>/data/jobs.json</code>. Add/edit/delete locally, then Export JSON or push to GitHub.</span>
   <span class="note" id="verNote"></span>
 </footer>
 
-<!-- Add Exam Modal -->
-<div class="modal" id="addModal">
+<!-- Add/Edit Modal -->
+<div class="modal" id="editModal">
   <div class="box">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-      <h3 style="margin:0;font-size:16px">Add exam / job</h3>
-      <button class="ghost" id="closeAdd">✕</button>
+      <h3 style="margin:0;font-size:16px" id="modalTitle">Add exam / job</h3>
+      <button class="ghost" id="closeEdit">✕</button>
     </div>
     <div class="grid cols-2">
       <div>
@@ -144,10 +144,10 @@ button.danger{background:#2a1120;color:#ffd5d5;border-color:#4c1a2d}
     </div>
     <div class="toolbar" style="margin-top:10px;justify-content:space-between">
       <div class="toolbar">
-        <button id="saveDraft" class="primary">Save draft (local)</button>
-        <button id="pushGithub">Push drafts to GitHub</button>
+        <button id="saveDraft" class="primary">Save</button>
+        <button id="pushGithub">Push changes to GitHub</button>
       </div>
-      <span class="note">Tip: configure repo/token in Settings to push directly.</span>
+      <span class="note">Configure repo/token in Settings to push directly; otherwise use Export JSON.</span>
     </div>
   </div>
 </div>
@@ -160,31 +160,19 @@ button.danger{background:#2a1120;color:#ffd5d5;border-color:#4c1a2d}
       <button class="ghost" id="closeSettings">✕</button>
     </div>
     <div class="grid cols-2">
-      <div>
-        <label class="note">Owner (user/org)</label>
-        <input id="gh_owner" placeholder="vikssarate" />
-      </div>
-      <div>
-        <label class="note">Repo</label>
-        <input id="gh_repo" placeholder="vikssarate.github.io" />
-      </div>
-      <div>
-        <label class="note">Branch</label>
-        <input id="gh_branch" placeholder="main" />
-      </div>
-      <div>
-        <label class="note">File path</label>
-        <input id="gh_path" placeholder="data/jobs.json" />
-      </div>
+      <div><label class="note">Owner</label><input id="gh_owner" placeholder="vikssarate" /></div>
+      <div><label class="note">Repo</label><input id="gh_repo" placeholder="vikssarate.github.io" /></div>
+      <div><label class="note">Branch</label><input id="gh_branch" placeholder="main" /></div>
+      <div><label class="note">File path</label><input id="gh_path" placeholder="data/jobs.json" /></div>
       <div style="grid-column:1/-1">
-        <label class="note">Personal Access Token (repo contents: read & write). Stored only in this browser.</label>
+        <label class="note">Personal Access Token (contents: read & write). Stored only in this browser.</label>
         <input id="gh_token" type="password" placeholder="ghp_… or fine-grained token" />
       </div>
     </div>
     <div class="toolbar" style="margin-top:10px;justify-content:space-between">
       <div class="toolbar">
         <button id="saveCfg" class="primary">Save</button>
-        <button id="testPush">Test push (no write)</button>
+        <button id="testPush">Test read</button>
         <button id="clearCfg" class="danger">Clear token</button>
       </div>
       <span class="note">Create token: GitHub → Settings → Developer settings → Personal access tokens.</span>
@@ -196,54 +184,56 @@ button.danger{background:#2a1120;color:#ffd5d5;border-color:#4c1a2d}
 (function(){
   const DATA_URL_BASE = 'data/jobs.json';
 
-  // DOM
-  const rows = $('#rows'), whoSel = $('#who'), q = $('#q'), statusFilter = $('#statusFilter'),
-        upcomingOnly = $('#upcomingOnly'), countNote = $('#countNote'), verNote = $('#verNote'),
-        tabs = $('#tabs'), exportCsvBtn = $('#exportCsv'), reloadBtn = $('#reload'),
-        exportJsonBtn = $('#exportJson'), draftNote = $('#draftNote'),
-        addBtn = $('#addBtn'), addModal = $('#addModal'), closeAdd = $('#closeAdd'),
-        m = (id)=>$('#'+id), settingsBtn = $('#settingsBtn'), settingsModal = $('#settingsModal'),
-        closeSettings = $('#closeSettings');
+  // --- DOM ---
+  const $ = s => document.querySelector(s);
+  const rows = $('#rows'), whoSel=$('#who'), q=$('#q'), statusFilter=$('#statusFilter'),
+        upcomingOnly=$('#upcomingOnly'), countNote=$('#countNote'), verNote=$('#verNote'),
+        tabs=$('#tabs'), draftNote=$('#draftNote'),
+        addBtn=$('#addBtn'), reloadBtn=$('#reload'),
+        exportCsvBtn=$('#exportCsv'), exportJsonBtn=$('#exportJson'),
+        editModal=$('#editModal'), closeEdit=$('#closeEdit'), modalTitle=$('#modalTitle'),
+        settingsBtn=$('#settingsBtn'), settingsModal=$('#settingsModal'), closeSettings=$('#closeSettings');
 
-  // state
+  // --- state ---
   const state = {
-    allRemote: [], // as loaded from jobs.json
-    all: [],       // remote + drafts (for rendering)
+    allRemote: [],
+    all: [],
     who: '',
     statusQuick: '',
     sortKey: 'examOn',
     sortDir: 'asc',
     version: '',
-    drafts: loadDrafts(),
-    cfg: loadCfg()
+    drafts: load('jt_drafts', []),
+    deletes: load('jt_deletes', []),   // tombstones (keys)
+    cfg: load('jt_cfg', {}),
+    currentEditKey: null               // when editing an existing row
   };
 
-  // ---------- helpers ----------
-  function $(s){ return document.querySelector(s); }
-  const esc = s => String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  // --- utils ---
+  const esc = s => String(s??'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
   const fmtDate = s => !s ? '—' : new Date(s+'T00:00:00').toLocaleDateString(undefined,{year:'numeric',month:'short',day:'2-digit'});
-  function daysUntil(s){ if(!s) return null; const t0 = new Date(); const d = new Date(s+'T00:00:00'); const today = new Date(t0.getFullYear(), t0.getMonth(), t0.getDate()); return Math.round((d - today)/86400000); }
+  function daysUntil(s){ if(!s) return null; const t0=new Date(); const d=new Date(s+'T00:00:00'); const today=new Date(t0.getFullYear(),t0.getMonth(),t0.getDate()); return Math.round((d-today)/86400000); }
   function badge(n){ if(n===null) return '<span class="badge">—</span>'; if(n<0) return `<span class="badge bad">${Math.abs(n)}d past</span>`; if(n===0) return `<span class="badge warn">Today</span>`; if(n<=7) return `<span class="badge warn">${n}d</span>`; if(n<=30) return `<span class="badge ok">${n}d</span>`; return `<span class="badge">${n}d</span>`; }
-  function cmp(a,b,key){ const av = a[key] ?? '', bv = b[key] ?? ''; if((key==='appliedOn'||key==='examOn')){ if(!av && !bv) return 0; if(!av) return 1; if(!bv) return -1; } return String(av).localeCompare(String(bv), undefined, {numeric:true, sensitivity:'base'}); }
-  function uniqueNames(arr){ return Array.from(new Set(arr.map(r => r.name).filter(Boolean))).sort((a,b)=>a.localeCompare(b)); }
-  function todayISO(){ const d=new Date(); return d.toISOString().slice(0,10); }
-  function b64(s){ return btoa(unescape(encodeURIComponent(s))); }
+  function cmp(a,b,key){ const av=a[key]??'', bv=b[key]??''; if((key==='appliedOn'||key==='examOn')){ if(!av&&!bv) return 0; if(!av) return 1; if(!bv) return -1; } return String(av).localeCompare(String(bv), undefined, {numeric:true, sensitivity:'base'}); }
+  const todayISO = ()=> new Date().toISOString().slice(0,10);
+  const b64 = s => btoa(unescape(encodeURIComponent(s)));
+  const unb64 = s => decodeURIComponent(escape(atob(s)));
 
-  // storage
-  function loadDrafts(){ try{ return JSON.parse(localStorage.getItem('jt_drafts')||'[]'); }catch{ return []; } }
-  function saveDrafts(){ localStorage.setItem('jt_drafts', JSON.stringify(state.drafts)); updateDraftNote(); }
-  function loadCfg(){ try{ return JSON.parse(localStorage.getItem('jt_cfg')||'{}'); }catch{ return {}; } }
-  function saveCfg(){ localStorage.setItem('jt_cfg', JSON.stringify(state.cfg||{})); }
+  // key used to identify rows (case-insensitive)
+  const keyOf = r => [r.name,r.title,r.appliedOn].map(x=>String(x||'').trim().toLowerCase()).join('||');
 
-  // ---------- data load / render ----------
+  function save(k,v){ localStorage.setItem(k, JSON.stringify(v)); }
+  function load(k,def){ try{ return JSON.parse(localStorage.getItem(k)||JSON.stringify(def)); }catch{ return def; } }
+
+  // --- load & compose ---
   async function loadData(cacheBust=false){
-    const url = cacheBust ? DATA_URL_BASE + '?v=' + Date.now() : DATA_URL_BASE;
-    const res = await fetch(url, {cache:'no-store'});
+    const url = cacheBust? DATA_URL_BASE+'?v='+Date.now() : DATA_URL_BASE;
+    const res = await fetch(url,{cache:'no-store'});
     if(!res.ok) throw new Error('Failed to load jobs.json');
     const json = await res.json();
     state.allRemote = Array.isArray(json.jobs)? json.jobs : [];
     state.version = json.version || '';
-    verNote.textContent = state.version ? ('Data version: ' + state.version) : '';
+    verNote.textContent = state.version ? ('Data version: '+state.version) : '';
     composeAll();
     populateWho();
     fromURL();
@@ -251,39 +241,37 @@ button.danger{background:#2a1120;color:#ffd5d5;border-color:#4c1a2d}
   }
 
   function composeAll(){
-    // merge remote + drafts; avoid duplicate identical rows (based on key fields)
-    const keyOf = r => [r.name,r.title,r.appliedOn].map(x=>String(x||'').trim().toLowerCase()).join('||');
     const map = new Map();
     state.allRemote.forEach(r=> map.set(keyOf(r), r));
-    state.drafts.forEach(d=> map.set(keyOf(d), {...d, _draft:true}));
+    state.drafts.forEach(d=> map.set(keyOf(d), {...d,_draft:true}));
+    state.deletes.forEach(k=> map.delete(k));
     state.all = Array.from(map.values());
+    updateChangeNote();
   }
 
   function populateWho(){
-    const names = uniqueNames(state.all);
-    const current = state.who || localStorage.getItem('jt_who') || (new URLSearchParams(location.search).get('who') || '');
+    const names = Array.from(new Set(state.all.map(r=>r.name).filter(Boolean))).sort((a,b)=>a.localeCompare(b));
+    const current = state.who || localStorage.getItem('jt_who') || (new URLSearchParams(location.search).get('who')||'');
     whoSel.innerHTML = '<option value="">— Select aspirant —</option>' + names.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
     if(names.includes(current)) whoSel.value = current;
     state.who = whoSel.value;
   }
 
   function matches(r){
-    if(state.who && r.name !== state.who) return false;
-    const statusChosen = state.statusQuick || statusFilter.value;
-    if(statusChosen && r.status !== statusChosen) return false;
-    if(upcomingOnly.checked){
-      const n = daysUntil(r.examOn);
-      if(n===null || n<0) return false;
-    }
+    if(state.who && r.name!==state.who) return false;
+    const chosen = state.statusQuick || statusFilter.value;
+    if(chosen && r.status!==chosen) return false;
+    if(upcomingOnly.checked){ const n=daysUntil(r.examOn); if(n===null || n<0) return false; }
     const term = q.value.trim().toLowerCase();
     if(!term) return true;
     return [r.title,r.org,r.notes].some(v => String(v||'').toLowerCase().includes(term));
   }
 
   function render(){
-    const filtered = state.all.filter(matches).sort((a,b)=> (state.sortDir==='asc'? cmp(a,b,state.sortKey) : -cmp(a,b,state.sortKey)));
-    rows.innerHTML = filtered.map(r=>`
-      <tr>
+    const filtered = state.all.filter(matches).sort((a,b)=> state.sortDir==='asc'?cmp(a,b,state.sortKey): -cmp(a,b,state.sortKey));
+    rows.innerHTML = filtered.map(r=>{
+      const k = keyOf(r), kenc = encodeURIComponent(k);
+      return `<tr>
         <td><div style="font-weight:600">${esc(r.title)}</div>${r._draft? ' <span class="badge warn">draft</span>':''}<div class="note hide-sm">${esc(r.name||'')}</div></td>
         <td class="hide-sm">${esc(r.org||'')}</td>
         <td>${fmtDate(r.appliedOn)}</td>
@@ -291,165 +279,196 @@ button.danger{background:#2a1120;color:#ffd5d5;border-color:#4c1a2d}
         <td>${badge(daysUntil(r.examOn))}</td>
         <td>${esc(r.status||'')}</td>
         <td class="hide-sm">${esc(r.notes||'')}</td>
-      </tr>
-    `).join('');
-    countNote.textContent = `${filtered.length} shown${state.who? ' for ' + state.who : ''} / ${state.all.length} total`;
-    localStorage.setItem('jt_who', state.who || '');
-    const usp = new URLSearchParams(location.search);
-    if(state.who) usp.set('who', state.who); else usp.delete('who');
-    history.replaceState(null, '', location.pathname + (usp.toString()? '?'+usp : ''));
-    updateDraftNote();
+        <td class="actions">
+          <button class="editBtn" data-k="${kenc}">Edit</button>
+          <button class="delBtn danger" data-k="${kenc}">Delete</button>
+        </td>
+      </tr>`;
+    }).join('');
+    countNote.textContent = `${filtered.length} shown${state.who? ' for '+state.who:''} / ${state.all.length} total`;
+    localStorage.setItem('jt_who', state.who||'');
+    const usp=new URLSearchParams(location.search); if(state.who) usp.set('who',state.who); else usp.delete('who');
+    history.replaceState(null,'',location.pathname+(usp.toString()? '?'+usp : ''));
   }
 
-  function updateDraftNote(){
-    const n = state.drafts.length;
-    draftNote.textContent = n? `Drafts pending: ${n}` : '';
+  function updateChangeNote(){
+    const adds = state.drafts.length, dels = state.deletes.length;
+    draftNote.textContent = (adds||dels)? `Changes pending: ${adds} add/edit, ${dels} delete` : '';
   }
 
-  // ---------- UI events ----------
-  whoSel.addEventListener('change', ()=>{ state.who = whoSel.value; render(); });
+  // --- events ---
+  whoSel.addEventListener('change', ()=>{ state.who=whoSel.value; render(); });
   q.addEventListener('input', render);
   statusFilter.addEventListener('change', ()=>{ state.statusQuick=''; setActiveTab(''); render(); });
   upcomingOnly.addEventListener('change', render);
   document.querySelectorAll('th.sortable').forEach(th=>{
-    th.addEventListener('click', ()=>{
-      const key = th.getAttribute('data-key');
-      if(state.sortKey===key){ state.sortDir = state.sortDir==='asc' ? 'desc' : 'asc'; }
-      else { state.sortKey = key; state.sortDir='asc'; }
-      render();
-    });
+    th.addEventListener('click', ()=>{ const k=th.getAttribute('data-key'); if(state.sortKey===k){ state.sortDir=state.sortDir==='asc'?'desc':'asc'; } else { state.sortKey=k; state.sortDir='asc'; } render(); });
   });
-  $('#tabs').addEventListener('click', (e)=>{
-    const btn = e.target.closest('button'); if(!btn) return;
-    const s = btn.getAttribute('data-status') || '';
-    state.statusQuick = s;
-    statusFilter.value = '';
-    setActiveTab(s); render();
-  });
-  function setActiveTab(s){ $('#tabs').querySelectorAll('button').forEach(b=> b.classList.toggle('active', (b.getAttribute('data-status')||'')===s)); }
+  tabs.addEventListener('click',(e)=>{ const b=e.target.closest('button'); if(!b) return; const s=b.getAttribute('data-status')||''; state.statusQuick=s; statusFilter.value=''; setActiveTab(s); render(); });
+  function setActiveTab(s){ tabs.querySelectorAll('button').forEach(b=> b.classList.toggle('active',(b.getAttribute('data-status')||'')===s)); }
 
   reloadBtn.addEventListener('click', ()=> loadData(true).catch(err=>alert(err.message)));
 
   exportCsvBtn.addEventListener('click', ()=>{
-    const headers = ['name','title','org','appliedOn','examOn','status','notes'];
-    const items = state.all.filter(matches);
-    const csv = [headers.join(',')].concat(items.map(o => headers.map(h => `"${String(o[h]??'').replace(/"/g,'""')}"`).join(','))).join('\n');
-    downloadFile(new Blob([csv], {type:'text/csv'}), (state.who? state.who+'-' : '') + 'jobs.csv');
+    const headers=['name','title','org','appliedOn','examOn','status','notes'];
+    const items=state.all.filter(matches);
+    const csv=[headers.join(',')].concat(items.map(o=>headers.map(h=>'"'+String(o[h]??'').replace(/"/g,'""')+'"').join(','))).join('\n');
+    download(new Blob([csv],{type:'text/csv'}),(state.who?state.who+'-':'')+'jobs.csv');
   });
 
   exportJsonBtn.addEventListener('click', ()=>{
-    const merged = mergeForSave(); // remote + drafts
-    const out = JSON.stringify(merged, null, 2);
-    downloadFile(new Blob([out], {type:'application/json'}), 'jobs.json');
+    const merged = mergeForSave(); // apply drafts + deletes
+    download(new Blob([JSON.stringify(merged,null,2)],{type:'application/json'}),'jobs.json');
   });
 
-  // ---------- Add exam modal ----------
-  addBtn.addEventListener('click', ()=>{
-    show(addModal,true);
-    m('m_name').value = state.who || '';
-    m('m_title').value = '';
-    m('m_org').value = '';
-    m('m_status').value = 'Applied';
-    m('m_appliedOn').value = todayISO();
-    m('m_examOn').value = '';
-    m('m_notes').value = '';
-    m('m_title').focus();
+  // delegate Edit/Delete clicks
+  rows.addEventListener('click',(e)=>{
+    const btn = e.target.closest('button'); if(!btn) return;
+    const key = decodeURIComponent(btn.dataset.k||'');
+    if(btn.classList.contains('editBtn')) return openEdit(key);
+    if(btn.classList.contains('delBtn')) return deleteByKey(key);
   });
-  closeAdd.addEventListener('click', ()=> show(addModal,false));
+
+  // --- Add / Edit modal ---
+  addBtn.addEventListener('click', ()=> openAdd());
+  closeEdit.addEventListener('click', ()=> show(editModal,false));
+  document.addEventListener('keydown', e=>{ if(e.key==='Escape') show(editModal,false); });
+
+  function openAdd(){
+    state.currentEditKey = null;
+    modalTitle.textContent = 'Add exam / job';
+    setForm({name: state.who||'', org:'', title:'', status:'Applied', appliedOn: todayISO(), examOn:'', notes:''});
+    show(editModal,true);
+    $('#m_title').focus();
+  }
+  function openEdit(key){
+    const rec = findByKey(key);
+    if(!rec){ alert('Item not found.'); return; }
+    state.currentEditKey = key;
+    modalTitle.textContent = 'Edit: ' + (rec.title||'');
+    setForm(rec);
+    show(editModal,true);
+  }
+  function setForm(r){
+    $('#m_name').value = r.name||'';
+    $('#m_org').value = r.org||'';
+    $('#m_title').value = r.title||'';
+    $('#m_status').value = r.status||'Applied';
+    $('#m_appliedOn').value = r.appliedOn||'';
+    $('#m_examOn').value = r.examOn||'';
+    $('#m_notes').value = r.notes||'';
+  }
+  function getForm(){
+    return {
+      name: $('#m_name').value.trim(),
+      org: $('#m_org').value.trim(),
+      title: $('#m_title').value.trim(),
+      status: $('#m_status').value,
+      appliedOn: $('#m_appliedOn').value,
+      examOn: $('#m_examOn').value,
+      notes: $('#m_notes').value.trim()
+    };
+  }
 
   $('#saveDraft').addEventListener('click', ()=>{
-    const rec = {
-      name: m('m_name').value.trim(),
-      title: m('m_title').value.trim(),
-      org: m('m_org').value.trim(),
-      appliedOn: m('m_appliedOn').value,
-      examOn: m('m_examOn').value,
-      status: m('m_status').value,
-      notes: m('m_notes').value.trim()
-    };
+    const rec = getForm();
     if(!rec.name || !rec.title || !rec.appliedOn){ alert('Please fill Name, Title, and Date applied.'); return; }
-    state.drafts.push(rec);
-    saveDrafts();
+    const newKey = keyOf(rec);
+    // if editing and key changed, mark old key for delete
+    if(state.currentEditKey && state.currentEditKey !== newKey){
+      if(!state.deletes.includes(state.currentEditKey)) state.deletes.push(state.currentEditKey);
+      save('jt_deletes', state.deletes);
+      // also remove any draft with old key
+      state.drafts = state.drafts.filter(d => keyOf(d) !== state.currentEditKey);
+    }
+    // upsert draft (replaces remote or previous draft)
+    const idx = state.drafts.findIndex(d => keyOf(d) === newKey);
+    if(idx>=0) state.drafts[idx] = rec; else state.drafts.push(rec);
+    save('jt_drafts', state.drafts);
+
     composeAll(); populateWho(); render();
-    show(addModal,false);
+    show(editModal,false);
   });
 
-  // push to GitHub (from Add modal)
-  $('#pushGithub').addEventListener('click', pushDraftsToGitHub);
+  // --- Delete ---
+  function deleteByKey(key){
+    const rec = findByKey(key); if(!rec) return;
+    if(!confirm('Delete this entry?')) return;
+    const k = key;
+    // if it is a draft, remove it; if remote, add tombstone
+    const i = state.drafts.findIndex(d => keyOf(d)===k);
+    if(i>=0){ state.drafts.splice(i,1); save('jt_drafts', state.drafts); }
+    else if(!state.deletes.includes(k)){ state.deletes.push(k); save('jt_deletes', state.deletes); }
+    composeAll(); render();
+  }
 
-  // ---------- Settings modal ----------
+  function findByKey(k){
+    // prefer draft version if exists
+    const d = state.drafts.find(x => keyOf(x)===k);
+    if(d) return {...d,_draft:true};
+    const r = state.allRemote.find(x => keyOf(x)===k);
+    return r ? {...r} : null;
+  }
+
+  // --- Settings / GitHub ---
   settingsBtn.addEventListener('click', ()=>{
     show(settingsModal,true);
-    m('gh_owner').value = state.cfg.owner || '';
-    m('gh_repo').value = state.cfg.repo || '';
-    m('gh_branch').value = state.cfg.branch || 'main';
-    m('gh_path').value = state.cfg.path || 'data/jobs.json';
-    m('gh_token').value = state.cfg.token || '';
+    $('#gh_owner').value = state.cfg.owner || '';
+    $('#gh_repo').value = state.cfg.repo || '';
+    $('#gh_branch').value = state.cfg.branch || 'main';
+    $('#gh_path').value = state.cfg.path || 'data/jobs.json';
+    $('#gh_token').value = state.cfg.token || '';
   });
   closeSettings.addEventListener('click', ()=> show(settingsModal,false));
-
   $('#saveCfg').addEventListener('click', ()=>{
     state.cfg = {
-      owner: m('gh_owner').value.trim(),
-      repo: m('gh_repo').value.trim(),
-      branch: m('gh_branch').value.trim() || 'main',
-      path: m('gh_path').value.trim() || 'data/jobs.json',
-      token: m('gh_token').value.trim()
+      owner: $('#gh_owner').value.trim(),
+      repo: $('#gh_repo').value.trim(),
+      branch: $('#gh_branch').value.trim() || 'main',
+      path: $('#gh_path').value.trim() || 'data/jobs.json',
+      token: $('#gh_token').value.trim()
     };
-    saveCfg();
-    alert('Saved. You can now push drafts from the Add modal.');
+    save('jt_cfg', state.cfg); alert('Saved.');
   });
-
-  $('#clearCfg').addEventListener('click', ()=>{
-    state.cfg = { owner:'', repo:'', branch:'', path:'', token:'' };
-    saveCfg(); alert('Cleared.');
-  });
-
+  $('#clearCfg').addEventListener('click', ()=>{ state.cfg={}; save('jt_cfg', state.cfg); alert('Cleared.'); });
   $('#testPush').addEventListener('click', async ()=>{
+    try{ const meta=await ghGetFileMeta(); alert('OK: found file with SHA '+(meta.sha||'')); }
+    catch(e){ alert('Check settings/token: '+e.message); }
+  });
+
+  // Push (from modal)
+  $('#pushGithub').addEventListener('click', pushToGitHub);
+
+  async function pushToGitHub(){
+    if(!(state.cfg && state.cfg.token)){ alert('Add GitHub token in Settings first.'); return; }
     try{
       const meta = await ghGetFileMeta();
-      alert('OK: found file with SHA ' + (meta.sha||''));
-    }catch(err){ alert('Check settings/token: '+ err.message); }
-  });
-
-  // ---------- GitHub API helpers ----------
-  async function pushDraftsToGitHub(){
-    if(!(state.cfg && state.cfg.token)){ alert('Add GitHub token in Settings first.'); return; }
-    if(!state.drafts.length){ alert('No drafts to push.'); return; }
-    try{
-      const meta = await ghGetFileMeta(); // includes existing content
-      const existing = JSON.parse(decodeURIComponent(escape(atob(meta.content.replace(/\n/g,'')))));
-      const merged = mergeForSave(existing); // add drafts
+      const existing = JSON.parse(unb64((meta.content||'').replace(/\n/g,'')));
+      const merged = mergeForSave(existing);
       const contentB64 = b64(JSON.stringify(merged,null,2));
       const res = await fetch(`https://api.github.com/repos/${state.cfg.owner}/${state.cfg.repo}/contents/${state.cfg.path}`,{
         method:'PUT',
-        headers:{
-          'Authorization':'Bearer '+state.cfg.token,
-          'Accept':'application/vnd.github+json'
-        },
-        body: JSON.stringify({
-          message: `Add ${state.drafts.length} job(s) via web app`,
-          content: contentB64,
-          sha: meta.sha,
-          branch: state.cfg.branch
-        })
+        headers:{ 'Authorization':'Bearer '+state.cfg.token, 'Accept':'application/vnd.github+json' },
+        body: JSON.stringify({ message:`Apply ${state.drafts.length} add/edit, ${state.deletes.length} delete`, content:contentB64, sha:meta.sha, branch:state.cfg.branch })
       });
-      if(!res.ok){ const t = await res.text(); throw new Error('GitHub write failed: '+t); }
-      // clear drafts and reload
-      state.drafts = []; saveDrafts();
+      if(!res.ok){ const t=await res.text(); throw new Error('GitHub write failed: '+t); }
+      // clear local changes and refresh
+      state.drafts=[]; state.deletes=[]; save('jt_drafts',state.drafts); save('jt_deletes',state.deletes);
       await loadData(true);
-      show(addModal,false);
+      show(editModal,false);
       alert('Pushed to GitHub ✔');
     }catch(err){ alert(err.message); }
   }
 
   function mergeForSave(existing){
-    const base = existing || { version:'', jobs: [] };
-    const out = { version: new Date().toISOString().slice(0,10), jobs: base.jobs.slice() };
-    // append drafts (avoid exact duplicate of name+title+appliedOn)
-    const keyOf = r => [r.name,r.title,r.appliedOn].map(x=>String(x||'').trim().toLowerCase()).join('||');
+    const base = existing || {version:'', jobs:[]};
+    // start from remote file content (if provided); remove deletions
+    const out = { version: new Date().toISOString().slice(0,10), jobs: [] };
+    const delset = new Set(state.deletes);
+    base.jobs.forEach(r=>{ if(!delset.has(keyOf(r))) out.jobs.push(r); });
+    // upsert drafts
     const set = new Set(out.jobs.map(keyOf));
-    state.drafts.forEach(d=>{ const k=keyOf(d); if(!set.has(k)){ out.jobs.push(d); set.add(k); } });
+    state.drafts.forEach(d=>{ const k=keyOf(d); if(set.has(k)){ out.jobs = out.jobs.map(r=> keyOf(r)===k? d:r); } else { out.jobs.push(d); set.add(k); } });
     return out;
   }
 
@@ -457,20 +476,18 @@ button.danger{background:#2a1120;color:#ffd5d5;border-color:#4c1a2d}
     const url = `https://api.github.com/repos/${state.cfg.owner}/${state.cfg.repo}/contents/${state.cfg.path}?ref=${encodeURIComponent(state.cfg.branch||'main')}`;
     const res = await fetch(url, { headers:{ 'Authorization':'Bearer '+state.cfg.token, 'Accept':'application/vnd.github+json' } });
     if(!res.ok) throw new Error('Fetch file failed ('+res.status+').');
-    return res.json(); // {sha, content(base64), ...}
+    return res.json();
   }
 
-  // ---------- utils ----------
-  function show(el, on){ el.classList.toggle('show', !!on); }
-  function downloadFile(blob, name){ const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); }
+  // --- helpers ---
+  function show(el,on){ el.classList.toggle('show', !!on); }
+  function download(blob,name){ const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); }
   function fromURL(){ const u=new URLSearchParams(location.search); const who=u.get('who'); if(who){ state.who=who; whoSel.value=who; } }
 
-  // ---------- init ----------
-  document.addEventListener('keydown', (e)=>{ if(e.key==='Escape'){ show(addModal,false); show(settingsModal,false);} });
-  document.querySelectorAll('.modal').forEach(m=> m.addEventListener('click', (e)=>{ if(e.target===m) show(m,false); }));
-
+  // --- init ---
+  document.querySelectorAll('.modal').forEach(m=> m.addEventListener('click', e=>{ if(e.target===m) show(m,false); }));
   loadData().catch(err=>{
-    rows.innerHTML = `<tr><td colspan="7">Failed to load data: ${esc(err.message)}. Ensure <code>/data/jobs.json</code> exists.</td></tr>`;
+    rows.innerHTML = `<tr><td colspan="8">Failed to load data: ${esc(err.message)}. Ensure <code>/data/jobs.json</code> exists.</td></tr>`;
   });
 })();
 </script>
